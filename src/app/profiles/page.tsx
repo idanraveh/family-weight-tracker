@@ -21,8 +21,10 @@ function avatarColor(name: string): string {
 
 function rankProfiles(stats: ProfileStats[]): ProfileStats[] {
   return [...stats].sort((a, b) => {
-    const pa = a.progressTowardGoalPercent ?? (a.latestTrendWeight != null ? -0.5 : -1);
-    const pb = b.progressTowardGoalPercent ?? (b.latestTrendWeight != null ? -0.5 : -1);
+    // Primary metric: % of body weight lost from starting weight.
+    // Higher is better. Null (no data) sinks to the bottom.
+    const pa = a.bodyWeightChangePercent ?? (a.latestTrendWeight != null ? -0.5 : -1);
+    const pb = b.bodyWeightChangePercent ?? (b.latestTrendWeight != null ? -0.5 : -1);
     return pb - pa;
   });
 }
@@ -31,14 +33,15 @@ function medal(rank: number) {
   return rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉";
 }
 
-function statusLabel(progress: number | null): string {
-  if (progress == null) return "No goal set";
-  if (progress >= 100) return "Goal reached! 🏆";
-  if (progress >= 85) return "So close! 🏃";
-  if (progress >= 60) return "Crushing it! ⚡";
-  if (progress >= 35) return "On fire! 🔥";
-  if (progress >= 15) return "Building momentum 💪";
-  return "Just getting started";
+// Descriptive label based on % of body weight lost
+function statusLabel(pct: number | null): string {
+  if (pct == null || pct <= 0) return "Just getting started";
+  if (pct >= 10) return "Transformation! 🏆";
+  if (pct >= 7)  return "Incredible! 🎯";
+  if (pct >= 4)  return "Crushing it! ⚡";
+  if (pct >= 2)  return "On fire! 🔥";
+  if (pct >= 1)  return "Building momentum 💪";
+  return "Warming up 🚶";
 }
 
 // ─── sub-components ─────────────────────────────────────────────────────────
@@ -145,7 +148,7 @@ function Podium({
                   </p>
                 )}
 
-                {s.progressTowardGoalPercent != null && (
+                {s.bodyWeightChangePercent != null && s.bodyWeightChangePercent > 0 && (
                   <span
                     className={`text-xs font-black px-2 py-0.5 rounded-full mt-0.5 ${
                       rank === 1
@@ -153,7 +156,7 @@ function Podium({
                         : "bg-gray-100 text-gray-500"
                     }`}
                   >
-                    {s.progressTowardGoalPercent.toFixed(0)}%
+                    ↓ {s.bodyWeightChangePercent.toFixed(1)}% BW
                   </span>
                 )}
               </div>
@@ -194,7 +197,7 @@ function RankedRow({
       <Avatar name={stats.name} size={38} />
       <div className="flex-1 min-w-0">
         <p className="font-bold text-gray-800 text-sm">{stats.name}</p>
-        <p className="text-xs text-gray-400">{statusLabel(stats.progressTowardGoalPercent)}</p>
+        <p className="text-xs text-gray-400">{statusLabel(stats.bodyWeightChangePercent)}</p>
         {stats.progressTowardGoalPercent != null && (
           <div className="mt-1">
             <ProgressBar value={stats.progressTowardGoalPercent} />
@@ -203,10 +206,12 @@ function RankedRow({
       </div>
       <div className="text-right shrink-0">
         <p className="font-bold text-gray-700 text-sm">{formatKg(stats.latestTrendWeight)}</p>
-        {stats.kgChange != null && (
-          <p className={`text-xs font-semibold ${stats.isWeightLossGoal && stats.kgChange > 0 ? "text-emerald-600" : "text-gray-400"}`}>
-            {stats.kgChange > 0 ? `↓${stats.kgChange.toFixed(1)}` : stats.kgChange < 0 ? `↑${Math.abs(stats.kgChange).toFixed(1)}` : "—"} kg
+        {stats.bodyWeightChangePercent != null && stats.bodyWeightChangePercent > 0 ? (
+          <p className="text-xs font-bold text-emerald-600">
+            ↓ {stats.bodyWeightChangePercent.toFixed(1)}% BW
           </p>
+        ) : (
+          <p className="text-xs text-gray-400">no data yet</p>
         )}
       </div>
       <span className="text-gray-300 group-hover:text-emerald-500 text-sm ml-1">→</span>
@@ -340,7 +345,7 @@ export default function ProfilesPage() {
             <span className="text-2xl">🏆</span>
             <div>
               <h2 className="font-black text-gray-800 text-xl leading-tight">Leaderboard</h2>
-              <p className="text-xs text-gray-400">Ranked by progress to goal</p>
+              <p className="text-xs text-gray-400">Ranked by % of body weight lost</p>
             </div>
           </div>
           <Podium ranked={podium} onSelect={selectProfile} />
