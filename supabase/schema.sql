@@ -36,6 +36,7 @@ alter table profiles  enable row level security;
 alter table weigh_ins enable row level security;
 
 create policy "Public read families"  on families  for select using (true);
+create policy "Public write families" on families  for all    using (true);
 create policy "Public read profiles"  on profiles  for select using (true);
 create policy "Public write profiles" on profiles  for all    using (true);
 create policy "Public read weigh_ins" on weigh_ins for select using (true);
