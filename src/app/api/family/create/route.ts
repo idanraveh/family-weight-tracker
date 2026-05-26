@@ -6,13 +6,13 @@ export async function POST(req: NextRequest) {
     const { name, pin } = await req.json();
     if (!name || !pin) return NextResponse.json({ error: "Name and PIN required" }, { status: 400 });
 
-    const pinUpper = pin.trim().toUpperCase();
+    const pinClean = pin.trim();
 
-    // Check PIN is not already taken
+    // Check PIN is not already taken (case-insensitive)
     const { data: existing } = await supabase
       .from("families")
       .select("id")
-      .eq("pin_code", pinUpper)
+      .ilike("pin_code", pinClean)
       .single();
 
     if (existing) {
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from("families")
-      .insert({ name: name.trim(), pin_code: pinUpper })
+      .insert({ name: name.trim(), pin_code: pinClean })
       .select("id, name")
       .single();
 

@@ -26,7 +26,7 @@ export default function CreateFamilyPage() {
       const res = await fetch("/api/family/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), pin: pin.trim().toUpperCase() }),
+        body: JSON.stringify({ name: name.trim(), pin: pin.trim() }),
       });
       const data = await res.json();
 
@@ -79,10 +79,13 @@ export default function CreateFamilyPage() {
           <input
             type="text"
             value={pin}
-            onChange={(e) => setPin(e.target.value.toUpperCase())}
-            placeholder="e.g. SMITH2024"
+            onChange={(e) => setPin(e.target.value)}
+            placeholder="e.g. smith2024"
             maxLength={20}
-            className="border-2 border-gray-200 focus:border-emerald-400 rounded-2xl py-3 px-4 outline-none text-gray-800 text-lg tracking-widest uppercase bg-white"
+            className="border-2 border-gray-200 focus:border-emerald-400 rounded-2xl py-3 px-4 outline-none text-gray-800 text-lg tracking-widest bg-white"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
             required
           />
           <p className="text-xs text-gray-400">Share this code with your family members.</p>
