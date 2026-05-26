@@ -6,10 +6,12 @@ export async function POST(req: NextRequest) {
     const { pin } = await req.json();
     if (!pin) return NextResponse.json({ error: "PIN required" }, { status: 400 });
 
+    // Normalise on both sides: strip whitespace, uppercase, compare case-insensitively
+    const normalised = pin.trim().toUpperCase();
     const { data, error } = await supabase
       .from("families")
       .select("id, name")
-      .eq("pin_code", pin.trim().toUpperCase())
+      .ilike("pin_code", normalised)
       .single();
 
     if (error || !data) {

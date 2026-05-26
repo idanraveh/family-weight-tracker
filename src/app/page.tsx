@@ -63,10 +63,13 @@ export default function HomePage() {
           <input
             type="text"
             value={pin}
-            onChange={(e) => setPin(e.target.value)}
-            placeholder="Enter your family code"
-            className="text-2xl text-center font-bold tracking-widest border-2 border-gray-200 focus:border-emerald-400 rounded-2xl py-4 px-4 outline-none bg-white text-gray-800 uppercase"
+            onChange={(e) => setPin(e.target.value.toUpperCase())}
+            placeholder="ENTER YOUR FAMILY CODE"
+            className="text-2xl text-center font-bold tracking-widest border-2 border-gray-200 focus:border-emerald-400 rounded-2xl py-4 px-4 outline-none bg-white text-gray-800"
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="characters"
+            spellCheck={false}
             autoFocus
           />
         </div>
