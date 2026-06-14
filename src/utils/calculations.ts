@@ -196,3 +196,95 @@ export function getWeeklySummary(weighIns: WeighIn[]): WeeklySummary {
 
   return { weeklyRate, now, pointCount: n, daysSpan };
 }
+
+// ─── Trend insights (MacroFactor-style) ──────────────────────────────────────
+
+export type ChangeDirection = "up" | "down" | "flat";
+
+export interface WeightChangeWindow {
+  days: number;                 // window length: 3, 7, 14, 30, 90
+  change: number | null;        // kg change over the window (now − start)
+  direction: ChangeDirection;
+  sparkline: number[];          // trend weights within the window
+  hasFullWindow: boolean;       // true if data covers the whole window
+}
+
+const CHANGE_WINDOWS = [3, 7, 14, 30, 90];
+
+function directionOf(change: number | null): ChangeDirection {
+  if (change == null || Math.abs(change) < 0.05) return "flat";
+  return change > 0 ? "up" : "down";
+}
+
+export function getWeightChangeWindows(weighIns: WeighIn[]): WeightChangeWindow[] {
+  const points = calculateTrendWeights(weighIns);
+  if (points.length === 0) {
+    return CHANGE_WINDOWS.map((days) => ({
+      days,
+      change: null,
+      direction: "flat" as ChangeDirection,
+      sparkline: [],
+      hasFullWindow: false,
+    }));
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const now = points[points.length - 1].trendWeight;
+
+  return CHANGE_WINDOWS.map((days) => {
+    const cutoff = offsetDate(today, -days);
+    const inWindow = points.filter((p) => p.date >= cutoff);
+
+    // Anchor = last trend point on/before the cutoff (true N-day-ago value).
+    const beforeCutoff = points.filter((p) => p.date < cutoff);
+    const hasFullWindow = beforeCutoff.length > 0;
+    const anchor = hasFullWindow
+      ? beforeCutoff[beforeCutoff.length - 1].trendWeight
+      : inWindow.length > 0
+      ? inWindow[0].trendWeight
+      : now;
+
+    const change = +(now - anchor).toFixed(2);
+    const sparkline = (hasFullWindow
+      ? [anchor, ...inWindow.map((p) => p.trendWeight)]
+      : inWindow.map((p) => p.trendWeight));
+
+    return {
+      days,
+      change: inWindow.length === 0 && !hasFullWindow ? null : change,
+      direction: directionOf(change),
+      sparkline,
+      hasFullWindow,
+    };
+  });
+}
+
+const KCAL_PER_KG = 7700; // approx energy in 1 kg of body mass
+
+export interface TrendInsights {
+  currentWeight: number | null;   // smoothed trend weight
+  weeklyRate: number | null;      // kg per week (− = losing)
+  energyDeficitKcal: number | null; // kcal/day (− = deficit)
+  projection30Day: number | null; // projected trend weight in 30 days
+  pointCount: number;
+  daysSpan: number;
+}
+
+export function getTrendInsights(weighIns: WeighIn[]): TrendInsights {
+  const { weeklyRate, now, pointCount, daysSpan } = getWeeklySummary(weighIns);
+
+  const energyDeficitKcal =
+    weeklyRate == null ? null : Math.round((weeklyRate * KCAL_PER_KG) / 7);
+
+  const projection30Day =
+    weeklyRate == null || now == null ? now : +(now + weeklyRate * (30 / 7)).toFixed(1);
+
+  return {
+    currentWeight: now,
+    weeklyRate,
+    energyDeficitKcal,
+    projection30Day,
+    pointCount,
+    daysSpan,
+  };
+}

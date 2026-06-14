@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { calculateTrendWeights, getProfileStats, getWeeklySummary } from "./calculations";
+import {
+  calculateTrendWeights,
+  getProfileStats,
+  getWeeklySummary,
+  getWeightChangeWindows,
+  getTrendInsights,
+} from "./calculations";
 import type { WeighIn, Profile } from "@/lib/types";
 
 /** ISO date `days` ago from today (UTC). */
@@ -181,5 +187,61 @@ describe("getWeeklySummary — regression-based weekly pace", () => {
     }
     const s = getWeeklySummary(weighIns);
     expect(Math.abs(s.weeklyRate!)).toBeLessThan(0.05);
+  });
+});
+
+describe("getWeightChangeWindows", () => {
+  it("returns all five windows even with no data", () => {
+    const windows = getWeightChangeWindows([]);
+    expect(windows.map((w) => w.days)).toEqual([3, 7, 14, 30, 90]);
+    expect(windows.every((w) => w.change === null)).toBe(true);
+  });
+
+  it("computes a negative change for a falling trend", () => {
+    const weighIns = [];
+    for (let d = 30; d >= 0; d--) {
+      weighIns.push(makeWeighIn(daysAgo(d), +(90 - (30 - d) * 0.1).toFixed(2)));
+    }
+    const windows = getWeightChangeWindows(weighIns);
+    const w7 = windows.find((w) => w.days === 7)!;
+    expect(w7.change).not.toBeNull();
+    expect(w7.change!).toBeLessThan(0);
+    expect(w7.direction).toBe("down");
+    expect(w7.hasFullWindow).toBe(true);
+  });
+
+  it("marks short history as not having a full long window", () => {
+    const weighIns = [makeWeighIn(daysAgo(2), 80), makeWeighIn(daysAgo(1), 79.8)];
+    const windows = getWeightChangeWindows(weighIns);
+    const w90 = windows.find((w) => w.days === 90)!;
+    expect(w90.hasFullWindow).toBe(false);
+  });
+});
+
+describe("getTrendInsights", () => {
+  it("derives energy deficit and projection from the weekly rate", () => {
+    // Steady ~ -0.7 kg/week loss over 28 days
+    const perDay = 0.1;
+    const weighIns = [];
+    for (let d = 28; d >= 0; d--) {
+      weighIns.push(makeWeighIn(daysAgo(d), +(90 - (28 - d) * perDay).toFixed(2)));
+    }
+    const ins = getTrendInsights(weighIns);
+    expect(ins.currentWeight).not.toBeNull();
+    expect(ins.weeklyRate!).toBeLessThan(0);
+
+    // energy deficit = weeklyRate * 7700 / 7, should be negative (a deficit)
+    expect(ins.energyDeficitKcal!).toBeLessThan(0);
+    const expectedKcal = Math.round((ins.weeklyRate! * 7700) / 7);
+    expect(ins.energyDeficitKcal).toBe(expectedKcal);
+
+    // projection = now + weeklyRate * 30/7, should be below current weight
+    expect(ins.projection30Day!).toBeLessThan(ins.currentWeight!);
+  });
+
+  it("returns nulls with no data", () => {
+    const ins = getTrendInsights([]);
+    expect(ins.currentWeight).toBeNull();
+    expect(ins.energyDeficitKcal).toBeNull();
   });
 });

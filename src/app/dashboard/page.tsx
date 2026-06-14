@@ -211,6 +211,23 @@ export default function DashboardPage() {
               <WeightChart points={trendPoints} />
             </div>
           )}
+
+          {/* Full trend insights link */}
+          <button
+            onClick={() => router.push("/trend")}
+            className="flex items-center justify-between bg-white border border-gray-100 hover:border-emerald-300 hover:bg-emerald-50 rounded-2xl px-5 py-4 transition-colors group"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">📈</span>
+              <span className="text-left">
+                <span className="block font-bold text-gray-800">Weight Trend insights</span>
+                <span className="block text-xs text-gray-400">
+                  Changes, weekly pace, energy balance &amp; projection
+                </span>
+              </span>
+            </span>
+            <span className="text-gray-300 group-hover:text-emerald-500 text-xl">→</span>
+          </button>
         </div>
       )}
 
