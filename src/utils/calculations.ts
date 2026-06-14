@@ -136,31 +136,27 @@ export function calculateStreak(weighIns: WeighIn[]): number {
 }
 
 export interface WeeklySummary {
-  thisWeekAvg: number | null;
-  lastWeekAvg: number | null;
-  delta: number | null; // negative = lost weight
+  // "now" = latest trend weight; "weekAgo" = trend weight from the closest point <= 7 days ago
+  now: number | null;
+  weekAgo: number | null;
+  delta: number | null; // positive = gained, negative = lost
 }
 
 export function getWeeklySummary(weighIns: WeighIn[]): WeeklySummary {
   const points = calculateTrendWeights(weighIns);
-  if (points.length === 0) return { thisWeekAvg: null, lastWeekAvg: null, delta: null };
+  if (points.length === 0) return { now: null, weekAgo: null, delta: null };
 
   const today = new Date().toISOString().slice(0, 10);
   const day7 = offsetDate(today, -7);
-  const day14 = offsetDate(today, -14);
 
-  const thisWeek = points.filter((p) => p.date > day7 && p.date <= today);
-  const lastWeek = points.filter((p) => p.date > day14 && p.date <= day7);
+  const now = points[points.length - 1].trendWeight;
 
-  const avg = (pts: TrendPoint[]) =>
-    pts.length === 0 ? null : +(pts.reduce((s, p) => s + p.trendWeight, 0) / pts.length).toFixed(2);
+  // Most recent trend point that is at least 7 days old
+  const oldPoints = points.filter((p) => p.date <= day7);
+  if (oldPoints.length === 0) return { now, weekAgo: null, delta: null };
 
-  const thisWeekAvg = avg(thisWeek);
-  const lastWeekAvg = avg(lastWeek);
-  const delta =
-    thisWeekAvg != null && lastWeekAvg != null
-      ? +(thisWeekAvg - lastWeekAvg).toFixed(2)
-      : null;
+  const weekAgo = oldPoints[oldPoints.length - 1].trendWeight;
+  const delta = +(now - weekAgo).toFixed(2);
 
-  return { thisWeekAvg, lastWeekAvg, delta };
+  return { now, weekAgo, delta };
 }
