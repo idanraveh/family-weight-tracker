@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { calculateTrendWeights, getProfileStats } from "./calculations";
+import { calculateTrendWeights, getProfileStats, getWeeklySummary } from "./calculations";
 import type { WeighIn, Profile } from "@/lib/types";
+
+/** ISO date `days` ago from today (UTC). */
+function daysAgo(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
 
 function makeWeighIn(date: string, weight_kg: number, created_at?: string): WeighIn {
   return {
@@ -127,5 +134,52 @@ describe("getProfileStats — no weigh-ins", () => {
     expect(stats.latestRawWeight).toBeNull();
     expect(stats.latestTrendWeight).toBeNull();
     expect(stats.kgChange).toBeNull();
+  });
+});
+
+describe("getWeeklySummary — regression-based weekly pace", () => {
+  it("returns null rate with no weigh-ins", () => {
+    const s = getWeeklySummary([]);
+    expect(s.weeklyRate).toBeNull();
+    expect(s.now).toBeNull();
+  });
+
+  it("returns null rate with a single weigh-in", () => {
+    const s = getWeeklySummary([makeWeighIn(daysAgo(2), 80)]);
+    expect(s.weeklyRate).toBeNull();
+    expect(s.now).toBe(80);
+  });
+
+  it("recovers a steady loss rate of ~0.5 kg/week", () => {
+    // Raw weight falls 0.5 kg/week = 1/14 kg per day over 21 days.
+    // Trend (EMA) converges to the same slope; allow tolerance for EMA lag.
+    const perDay = 0.5 / 7;
+    const weighIns = [];
+    for (let d = 21; d >= 0; d--) {
+      weighIns.push(makeWeighIn(daysAgo(d), +(85 - (21 - d) * perDay).toFixed(2)));
+    }
+    const s = getWeeklySummary(weighIns);
+    expect(s.weeklyRate).not.toBeNull();
+    expect(s.weeklyRate!).toBeGreaterThan(-0.6);
+    expect(s.weeklyRate!).toBeLessThan(-0.4);
+    expect(s.pointCount).toBeGreaterThan(2);
+  });
+
+  it("reports a positive rate for steady gain", () => {
+    const weighIns = [];
+    for (let d = 21; d >= 0; d--) {
+      weighIns.push(makeWeighIn(daysAgo(d), +(60 + (21 - d) * 0.1).toFixed(2)));
+    }
+    const s = getWeeklySummary(weighIns);
+    expect(s.weeklyRate!).toBeGreaterThan(0);
+  });
+
+  it("reports ~zero rate for flat weight", () => {
+    const weighIns = [];
+    for (let d = 14; d >= 0; d--) {
+      weighIns.push(makeWeighIn(daysAgo(d), 75));
+    }
+    const s = getWeeklySummary(weighIns);
+    expect(Math.abs(s.weeklyRate!)).toBeLessThan(0.05);
   });
 });

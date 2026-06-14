@@ -136,27 +136,63 @@ export function calculateStreak(weighIns: WeighIn[]): number {
 }
 
 export interface WeeklySummary {
-  // "now" = latest trend weight; "weekAgo" = trend weight from the closest point <= 7 days ago
-  now: number | null;
-  weekAgo: number | null;
-  delta: number | null; // positive = gained, negative = lost
+  // Weekly rate of change from a least-squares fit over the recent window.
+  weeklyRate: number | null; // kg per week; negative = losing, positive = gaining
+  now: number | null;        // latest trend weight (for display context)
+  pointCount: number;        // number of trend points used in the fit
+  daysSpan: number;          // calendar days the fit spans
 }
 
+const REGRESSION_WINDOW_DAYS = 28;
+
+function daysBetween(a: string, b: string): number {
+  const ms = new Date(b + "T12:00:00Z").getTime() - new Date(a + "T12:00:00Z").getTime();
+  return Math.round(ms / 86_400_000);
+}
+
+/**
+ * Weekly rate via least-squares linear regression over the trend weights of the
+ * last REGRESSION_WINDOW_DAYS. The slope (kg/day) × 7 is the weekly rate. Using
+ * the full window instead of two single points means no single day's reading can
+ * swing the result.
+ */
 export function getWeeklySummary(weighIns: WeighIn[]): WeeklySummary {
-  const points = calculateTrendWeights(weighIns);
-  if (points.length === 0) return { now: null, weekAgo: null, delta: null };
+  const all = calculateTrendWeights(weighIns);
+  if (all.length === 0) return { weeklyRate: null, now: null, pointCount: 0, daysSpan: 0 };
 
+  const now = all[all.length - 1].trendWeight;
   const today = new Date().toISOString().slice(0, 10);
-  const day7 = offsetDate(today, -7);
+  const windowStart = offsetDate(today, -REGRESSION_WINDOW_DAYS);
+  const points = all.filter((p) => p.date >= windowStart);
 
-  const now = points[points.length - 1].trendWeight;
+  // Need at least two points spanning real time to fit a slope.
+  if (points.length < 2) {
+    return { weeklyRate: null, now, pointCount: points.length, daysSpan: 0 };
+  }
 
-  // Most recent trend point that is at least 7 days old
-  const oldPoints = points.filter((p) => p.date <= day7);
-  if (oldPoints.length === 0) return { now, weekAgo: null, delta: null };
+  const x0 = points[0].date;
+  const xs = points.map((p) => daysBetween(x0, p.date)); // days since window's first point
+  const ys = points.map((p) => p.trendWeight);
+  const daysSpan = xs[xs.length - 1];
 
-  const weekAgo = oldPoints[oldPoints.length - 1].trendWeight;
-  const delta = +(now - weekAgo).toFixed(2);
+  const n = points.length;
+  const meanX = xs.reduce((s, v) => s + v, 0) / n;
+  const meanY = ys.reduce((s, v) => s + v, 0) / n;
 
-  return { now, weekAgo, delta };
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - meanX) * (ys[i] - meanY);
+    den += (xs[i] - meanX) ** 2;
+  }
+
+  // All weigh-ins on the same day → no slope.
+  if (den === 0) {
+    return { weeklyRate: null, now, pointCount: n, daysSpan };
+  }
+
+  const slopePerDay = num / den;
+  const weeklyRate = +(slopePerDay * 7).toFixed(2);
+
+  return { weeklyRate, now, pointCount: n, daysSpan };
 }
